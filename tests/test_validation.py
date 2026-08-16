@@ -3,8 +3,9 @@ import pytest
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from raygun.validation import (is_nucleotide_sequence, noise_effective_fraction,
-                               describe_noise_support, partition_records)
+from raygun.validation import (describe_noise_support, describe_reconstruction_quality,
+                               is_nucleotide_sequence, noise_effective_fraction,
+                               partition_records, reconstruction_identity)
 
 # Chain I of PDB 4R8P: 147-mer nucleosomal DNA. Every character is also a valid
 # amino-acid code, so nothing downstream complains about it.
@@ -69,6 +70,36 @@ class TestDescribeNoiseSupport:
     def test_flags_partial_support(self):
         msg = describe_noise_support(56)
         assert msg is not None and "12%" in msg
+
+
+class TestReconstructionQuality:
+    def test_perfect_reconstruction(self):
+        assert reconstruction_identity(HISTONE_H4, HISTONE_H4) == 1.0
+
+    def test_counts_mismatches(self):
+        mutated = "C" + HISTONE_H4[1:]
+        expected = (len(HISTONE_H4) - 1) / len(HISTONE_H4)
+        assert reconstruction_identity(HISTONE_H4, mutated) == pytest.approx(expected)
+
+    def test_length_mismatch_is_not_flattered(self):
+        # Scoring only the overlap would report 1.0 for a truncated result.
+        assert reconstruction_identity("ACDEFGHIKL", "ACDEF") == pytest.approx(0.5)
+
+    def test_empty_template(self):
+        assert reconstruction_identity("", "ACDE") == 0.0
+
+    def test_silent_above_threshold(self):
+        assert describe_reconstruction_quality("1ABC_1", 0.95) is None
+        assert describe_reconstruction_quality("1ABC_1", 0.90) is None
+
+    def test_warns_below_threshold(self):
+        # 1Y2M_1 in the benchmark: 716 residues, reconstructed at 0.855.
+        msg = describe_reconstruction_quality("1Y2M_1", 0.855)
+        assert msg is not None
+        assert "1Y2M_1" in msg and "0.855" in msg and "finetune" in msg.lower()
+
+    def test_threshold_is_configurable(self):
+        assert describe_reconstruction_quality("x", 0.93, threshold=0.95) is not None
 
 
 class TestPartitionRecords:

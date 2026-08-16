@@ -76,6 +76,37 @@ def describe_noise_support(length, reduce_size=50):
             f"distinct samples than longer ones.")
 
 
+# The README's own criterion: below this zero-shot reconstruction identity it
+# recommends fine-tuning before trusting any generated candidate.
+RECONSTRUCTION_THRESHOLD = 0.90
+
+
+def reconstruction_identity(template, reconstruction):
+    """Positional identity between a template and its zero-noise reconstruction.
+
+    Both are the same length by construction, so no alignment is needed. A short
+    reconstruction (which should not happen) is scored against the template
+    length rather than silently flattering the result.
+    """
+    if not template:
+        return 0.0
+    matches = sum(a == b for a, b in zip(template, reconstruction))
+    return matches / max(len(template), len(reconstruction))
+
+
+def describe_reconstruction_quality(name, identity,
+                                    threshold=RECONSTRUCTION_THRESHOLD):
+    """Warning text if the model cannot reproduce this template, else None."""
+    if identity >= threshold:
+        return None
+    return (f"{name}: zero-shot reconstruction identity is only {identity:.3f}, "
+            f"below the {threshold:.2f} at which fine-tuning is recommended. "
+            f"Generated candidates start from a representation that does not "
+            f"reproduce this template, so they will drift further still. "
+            f"Consider --finetune, or a shorter template: reconstruction "
+            f"accuracy falls off with sequence length.")
+
+
 def partition_records(records, minlength=50, maxlength=1000,
                       allow_nucleotides=False):
     """Split SeqIO records into (accepted, rejected).

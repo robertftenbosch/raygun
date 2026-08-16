@@ -300,6 +300,13 @@ quietly shrinking the dataset:
 - `--allow-nucleotides` disables the DNA/RNA check described above.
 - `--strict-input` turns those warnings into an error.
 
+Both commands also make one zero-noise pass per template before sampling and
+report the reconstruction identity, warning when it falls below the 0.90 at
+which this README recommends fine-tuning. Reconstruction accuracy falls off with
+length: on a benchmark of 82 PDB templates the median was 0.995, but the single
+template that failed the threshold was the longest one at 716 residues. Use
+`--skip-reconstruction-check` to skip the pass.
+
 Note that `--noiseratio` has no effect on sequences shorter than about 100
 residues. The encoder derives its noise sigma from the spread *within* each
 averaging window, and a sequence of length `L` uses windows of `L // 50`
