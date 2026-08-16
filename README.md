@@ -267,6 +267,29 @@ raygun-sample-multiple --lengthinfo <Length json file>  <template-fasta-file> <o
 ```
 Additionally, in the rare case that the off-the-shelf sequence reconstruction of the template is poor, both `raygun-sample-single` and `raygun-sample-multiple` allows finetuning (as our earlier model) by enabling the `--finetuning` option. For detailed instructions, please look at the `example_sh` folder for working examples. 
 
+### Fetching templates from the RCSB PDB
+
+`raygun-fetch-rcsb` pulls template sequences straight from the PDB, so you can go
+from a structural query to a Raygun run without assembling FASTA files by hand.
+
+``` bash
+# 100 X-ray structures at 2.0 A or better, written with matching length ranges
+raygun-fetch-rcsb templates.fasta --limit 100 --resolution-max 2.0 \
+    --method "X-RAY DIFFRACTION" --lengthinfo lengths.json --shrink 0.9
+
+raygun-sample-multiple --lengthinfo lengths.json templates.fasta output-folder
+```
+
+Records are written with a clean `<entry>_<entity>` id (e.g. `4R8P_1`), because
+Biopython truncates the full PDB header at the first whitespace and the resulting
+`4R8P_1|Chains` key will not match anything in your length JSON.
+
+By default the command drops nucleotide entities, sequences outside
+50-1000 residues, and duplicate sequences, reporting the count for each reason.
+Nucleotide entities matter in particular: A, C, G and T are all valid amino-acid
+codes, so a DNA chain is otherwise embedded and generated from as though it were
+a protein, and it tends to score *better* under PLL filtering than real protein.
+
 ### Input validation
 
 Both sampling commands now report what they refuse to process instead of
