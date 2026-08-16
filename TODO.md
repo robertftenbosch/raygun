@@ -22,11 +22,15 @@ git history.
   `benchmarks/results.tsv` has PLL per residue for 82 templates spanning 52-716
   residues and can be used to fit or falsify the relation. Do not change the
   constants on intuition.
-- [ ] **Decide whether `--penalizerepeats` should default to on.** With it off,
-  histone candidates drifted toward basic homopolymers: longest single-residue
-  run went from 2-3 in the templates to 3-5 in candidates, K/R fraction rose
-  1-4 percentage points, and `AVTKTQKKDGKKRRKTRKE` collapsed to `ATKQKKKRRRRRE`.
-  Quantify the cost on well-behaved templates before flipping the default.
+- [ ] **Decide whether `--penalizerepeats` should default to on.** Weaker
+  evidence than it first appeared. The drift toward basic homopolymers on
+  histone templates (K/R fraction up 1-4 percentage points,
+  `AVTKTQKKDGKKRRKTRKE` collapsing to `ATKQKKKRRRRRE`) was measured on the 4.4M
+  model, which `raygun-sample-multiple` used to load unconditionally. Repeating
+  the run on 8.8M brought the K/R fraction back in line with the templates
+  (H2A: template 0.202, 4.4M 0.238, 8.8M 0.195). Longest single-residue runs are
+  still somewhat elevated (3-5 against 2-3 in the templates), so there may be
+  something left here, but it needs measuring on 8.8M before acting.
 - [ ] **Deletions land in the structured core, not the disordered tails.** For
   histones H3, H4 and H2A the model kept the flexible N-terminal tails intact
   and cut into the histone-fold helices instead, which is backwards for

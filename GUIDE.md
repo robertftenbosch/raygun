@@ -149,9 +149,11 @@ Parameters worth understanding:
   `--sample_ratio` is the multiplier for how many get generated first. The
   default 10 means 500 generated to return 50. Lower it for short templates,
   where most generations come out identical anyway.
-- `--penalizerepeats` is off by default. Turn it on for charged, low-complexity
-  templates: histone candidates drifted toward basic homopolymers without it
-  (`AVTKTQKKDGKKRRKTRKE` collapsed to `ATKQKKKRRRRRE`).
+- `--penalizerepeats` is off by default. Worth turning on for charged,
+  low-complexity templates: histone candidates still show single-residue runs of
+  3-5 where the templates have 2-3. (The stronger drift toward basic
+  homopolymers seen initially turned out to come from the 4.4M model rather than
+  from the setting.)
 - `--finetune` is rarely needed given median reconstruction of 0.995; use it
   when §5 tells you to.
 
