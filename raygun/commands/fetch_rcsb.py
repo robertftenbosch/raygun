@@ -5,7 +5,6 @@
 import argparse
 import json
 import logging
-import random
 import sys
 
 from Bio import SeqIO
@@ -33,10 +32,13 @@ def get_params():
     parser.add_argument("--method", default=None,
                         help="Experimental method, e.g. 'X-RAY DIFFRACTION'")
     parser.add_argument("--start", type=int, default=0,
-                        help="Offset into the search results, for fetching a different slice")
-    parser.add_argument("--oversample", type=float, default=3.0,
-                        help="Search this multiple of --limit and sample from it, for a "
-                             "less alphabetically clustered set (default: 3)")
+                        help="Offset into the search results; only used with --contiguous")
+    parser.add_argument("--contiguous", action="store_true", default=False,
+                        help="Read one contiguous page from --start instead of scattering. "
+                             "PDB ids are ordered roughly chronologically, so a contiguous "
+                             "page returns long runs of point mutants of the same protein")
+    parser.add_argument("--chunks", type=int, default=20,
+                        help="Number of random offsets to draw the sample from (default: 20)")
     parser.add_argument("--seed", type=int, default=0, help="Seed for that sampling")
     parser.add_argument("--minlength", type=int, default=50,
                         help="Drop entities shorter than this (default: 50, Raygun's own floor)")
@@ -64,18 +66,16 @@ def main():
         entries = [e.strip().upper() for e in config["entries"].split(",") if e.strip()]
         logger.info(f"using {len(entries)} explicitly requested entries")
     else:
-        pool = max(config["limit"], int(config["limit"] * config["oversample"]))
-        candidates = search_entries(limit=pool,
-                                    resolution_max=config["resolution_max"],
-                                    method=config["method"],
-                                    start=config["start"])
-        if not candidates:
+        entries = search_entries(limit=config["limit"],
+                                 resolution_max=config["resolution_max"],
+                                 method=config["method"],
+                                 start=config["start"],
+                                 scatter=not config["contiguous"],
+                                 chunks=config["chunks"],
+                                 seed=config["seed"])
+        if not entries:
             logger.error("RCSB search returned no entries; loosen the filters")
             return 1
-        if len(candidates) > config["limit"]:
-            random.Random(config["seed"]).shuffle(candidates)
-            candidates = candidates[:config["limit"]]
-        entries = candidates
         logger.info(f"selected {len(entries)} entries")
 
     records = fetch_entry_records(entries)

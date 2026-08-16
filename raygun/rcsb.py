@@ -18,6 +18,7 @@ be processed as if they were protein.
 """
 import json
 import logging
+import random
 import time
 import urllib.error
 import urllib.request
@@ -82,18 +83,55 @@ def build_query(resolution_max=None, method=None, min_entities=1):
     return {"type": "group", "logical_operator": "and", "nodes": terms}
 
 
-def search_entries(limit=100, resolution_max=None, method=None, start=0):
-    """Return up to `limit` PDB entry ids matching the filters."""
-    payload = {
-        "query": build_query(resolution_max=resolution_max, method=method),
-        "return_type": "entry",
-        "request_options": {"paginate": {"start": start, "rows": limit}},
-    }
+def _search_page(query, start, rows):
+    payload = {"query": query, "return_type": "entry",
+               "request_options": {"paginate": {"start": start, "rows": rows}}}
     result = json.loads(_request(SEARCH_URL, data=payload))
-    ids = [hit["identifier"] for hit in result.get("result_set", [])]
-    logger.info(f"RCSB search matched {result.get('total_count', 0)} entries; "
-                f"took {len(ids)} starting at offset {start}")
-    return ids
+    return ([hit["identifier"] for hit in result.get("result_set", [])],
+            result.get("total_count", 0))
+
+
+def search_entries(limit=100, resolution_max=None, method=None, start=0,
+                   scatter=True, chunks=20, seed=0):
+    """Return up to `limit` PDB entry ids matching the filters.
+
+    The Search API returns hits in a stable order, which for PDB ids is
+    essentially alphabetical and therefore chronological: reading from offset 0
+    yields 101M, 102L, 102M, 103L ... - long runs of myoglobin and T4 lysozyme
+    point mutants that share one sequence. Taking a contiguous page gives a
+    sample that looks large but collapses to a handful of distinct proteins.
+
+    With `scatter` (the default) the ids are instead drawn from `chunks` random
+    offsets spread across the whole result set. Pass `scatter=False` with
+    `start` to read a specific contiguous slice.
+    """
+    query = build_query(resolution_max=resolution_max, method=method)
+
+    if not scatter:
+        ids, total = _search_page(query, start, limit)
+        logger.info(f"RCSB search matched {total} entries; took {len(ids)} "
+                    f"starting at offset {start}")
+        return ids
+
+    _, total = _search_page(query, 0, 1)
+    if total == 0:
+        return []
+    nchunks = max(1, min(chunks, limit))
+    perchunk = -(-limit // nchunks)          # ceil, so the chunks cover `limit`
+    rng = random.Random(seed)
+    highest = max(0, total - perchunk)
+    offsets = sorted(rng.sample(range(highest + 1), min(nchunks, highest + 1)))
+
+    ids, seen = [], set()
+    for offset in offsets:
+        page, _ = _search_page(query, offset, perchunk)
+        for pdbid in page:
+            if pdbid not in seen:
+                seen.add(pdbid)
+                ids.append(pdbid)
+    logger.info(f"RCSB search matched {total} entries; sampled {len(ids)} from "
+                f"{len(offsets)} offsets spread across the result set")
+    return ids[:limit]
 
 
 def parse_header(header):

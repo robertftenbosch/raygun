@@ -2,6 +2,7 @@
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
+import raygun.rcsb as rcsb
 from raygun.rcsb import (_parse_fasta_text, build_query, filter_records,
                          lengthinfo_for, parse_header)
 
@@ -87,6 +88,54 @@ class TestLengthinfo:
         # raygun-sample-multiple reads back out of the FASTA.
         rec = SeqRecord(Seq("A" * 100), id="4R8P_1")
         assert "4R8P_1" in lengthinfo_for([rec])
+
+
+class TestSearchEntries:
+    """The PDB orders hits by id, which groups point mutants of one protein
+    together; scattering the offsets is what keeps a sample diverse."""
+
+    def fake_index(self, monkeypatch, total=1000):
+        calls = []
+
+        def fake_page(query, start, rows):
+            calls.append((start, rows))
+            return [f"E{i:04d}" for i in range(start, min(start + rows, total))], total
+
+        monkeypatch.setattr(rcsb, "_search_page", fake_page)
+        return calls
+
+    def test_contiguous_reads_one_page(self, monkeypatch):
+        calls = self.fake_index(monkeypatch)
+        ids = rcsb.search_entries(limit=10, scatter=False, start=40)
+        assert ids == [f"E{i:04d}" for i in range(40, 50)]
+        assert calls == [(40, 10)]
+
+    def test_scatter_spreads_across_the_result_set(self, monkeypatch):
+        calls = self.fake_index(monkeypatch)
+        ids = rcsb.search_entries(limit=20, chunks=10, seed=1)
+        offsets = [start for start, _ in calls[1:]]     # first call probes the count
+        assert len(offsets) == 10
+        assert max(offsets) - min(offsets) > 100        # genuinely spread out
+        assert len(ids) == 20
+
+    def test_scatter_is_reproducible_for_a_seed(self, monkeypatch):
+        self.fake_index(monkeypatch)
+        first = rcsb.search_entries(limit=20, chunks=5, seed=7)
+        self.fake_index(monkeypatch)
+        assert rcsb.search_entries(limit=20, chunks=5, seed=7) == first
+
+    def test_never_exceeds_limit(self, monkeypatch):
+        self.fake_index(monkeypatch)
+        assert len(rcsb.search_entries(limit=7, chunks=5, seed=0)) == 7
+
+    def test_empty_result_set(self, monkeypatch):
+        monkeypatch.setattr(rcsb, "_search_page", lambda q, s, r: ([], 0))
+        assert rcsb.search_entries(limit=10) == []
+
+    def test_handles_result_set_smaller_than_limit(self, monkeypatch):
+        self.fake_index(monkeypatch, total=3)
+        ids = rcsb.search_entries(limit=10, chunks=5, seed=0)
+        assert len(ids) == len(set(ids)) <= 3
 
 
 class TestBuildQuery:
