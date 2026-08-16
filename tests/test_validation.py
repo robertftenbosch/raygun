@@ -102,6 +102,24 @@ class TestReconstructionQuality:
         assert describe_reconstruction_quality("x", 0.93, threshold=0.95) is not None
 
 
+class TestModelRegistry:
+    """Both sampling commands must resolve model names the same way; they used
+    to disagree, with raygun-sample-multiple hardcoded to 4.4M."""
+
+    def test_default_is_the_recommended_model(self):
+        from raygun.pretrained import DEFAULT_MODEL
+        assert DEFAULT_MODEL == "8.8M"
+
+    def test_registry_covers_the_released_models(self):
+        from raygun.pretrained import PRETRAINED_MODELS
+        assert set(PRETRAINED_MODELS) == {"2.2M", "4.4M", "8.8M"}
+
+    def test_unknown_name_is_rejected(self):
+        from raygun.pretrained import load_pretrained
+        with pytest.raises(ValueError, match="Unknown Raygun model"):
+            load_pretrained("16M")
+
+
 class TestPartitionRecords:
     def test_rejects_dna_and_keeps_protein(self):
         accepted, rejected = partition_records(

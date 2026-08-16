@@ -77,5 +77,24 @@ def raygun_8_8mil_800M(return_lightning_module = False):
     raymodel      = load_raymodel(checkpoint, fixed_batching=True)
     del checkpoint
     if not return_lightning_module:
-        raymodel = raymodel.model 
+        raymodel = raymodel.model
     return raymodel
+
+
+# Keyed by the name the command line uses. 8.8M is the model the README
+# recommends; keep it as the default everywhere so the two sampling commands
+# cannot silently disagree about which weights they use.
+PRETRAINED_MODELS = {
+    "2.2M": raygun_2_2mil_800M,
+    "4.4M": raygun_4_4mil_800M,
+    "8.8M": raygun_8_8mil_800M,
+}
+DEFAULT_MODEL = "8.8M"
+
+
+def load_pretrained(name=DEFAULT_MODEL, return_lightning_module=True):
+    """Load a released Raygun model by name, e.g. '8.8M'."""
+    if name not in PRETRAINED_MODELS:
+        raise ValueError(f"Unknown Raygun model {name!r}; choose one of "
+                         f"{', '.join(PRETRAINED_MODELS)}")
+    return PRETRAINED_MODELS[name](return_lightning_module=return_lightning_module)

@@ -157,20 +157,15 @@ def get_model_(mod, checkpoint=None,
                                                             strict=False)
         return raymodel
     # if checkpoint not provided, return the default pretrained
-    if mod == "2.2M":
-        return pretrained.raygun_2_2mil_800M(return_lightning_module=True)
-    elif mod == "4.4M":
-        return pretrained.raygun_4_4mil_800M(return_lightning_module=True)
-    elif mod == "8.8M":
-        return pretrained.raygun_8_8mil_800M(return_lightning_module=True)
-    raise Exception(f"Model {mod} is invalid.")
+    return pretrained.load_pretrained(mod, return_lightning_module=True)
 
 
     
 def get_model(config, esmmodel, esmalph):
-    logging.info(f"Loading the raygun model `raygun_4_4mil_800M`")
     mod        = config["model"]
     checkpoint = config["checkpoint"]
+    logger.info(f"Loading checkpoint {checkpoint}" if checkpoint is not None
+                else f"Loading the Raygun {mod} model")
     raymodel = get_model_(mod, checkpoint=checkpoint,
                           checkpoint_encoders=config["checkpoint_encoders"],
                           checkpoint_decoders=config["checkpoint_decoders"],
