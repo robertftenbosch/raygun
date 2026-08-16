@@ -10,6 +10,12 @@ the original template protein. We anticipate Raygun to be valuable in a variety
 of applications related to protein miniaturization, property optimization and so on.
 
 
+> **This fork** adds input validation, an RCSB PDB integration and a benchmark.
+> Start with **[GUIDE.md](GUIDE.md)** for a practical walkthrough (which
+> templates work, what to check before generating, how to read the output),
+> [benchmarks/](benchmarks/README.md) for measured behaviour across 82 PDB
+> templates, and [TODO.md](TODO.md) for what is still open.
+
 -----
 
 ## Table of Contents
