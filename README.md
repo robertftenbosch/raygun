@@ -263,9 +263,26 @@ ratio of 10 implies that 500 sequences are generated internally to finally retur
 ```
 One can invoke `raygun-sample-multiple` the following way
 ```
-raygun-sample-multiple --leninfo <Length json file>  <template-fasta-file> <output-folder>
+raygun-sample-multiple --lengthinfo <Length json file>  <template-fasta-file> <output-folder>
 ```
 Additionally, in the rare case that the off-the-shelf sequence reconstruction of the template is poor, both `raygun-sample-single` and `raygun-sample-multiple` allows finetuning (as our earlier model) by enabling the `--finetuning` option. For detailed instructions, please look at the `example_sh` folder for working examples. 
+
+### Input validation
+
+Both sampling commands now report what they refuse to process instead of
+quietly shrinking the dataset:
+
+- `--filter-minlength` / `--filter-maxlength` expose the length bounds that were
+  previously hardcoded at 50-1000. Records outside them are logged by name.
+- `--allow-nucleotides` disables the DNA/RNA check described above.
+- `--strict-input` turns those warnings into an error.
+
+Note that `--noiseratio` has no effect on sequences shorter than about 100
+residues. The encoder derives its noise sigma from the spread *within* each
+averaging window, and a sequence of length `L` uses windows of `L // 50`
+residues; below 100 residues those windows hold a single residue, whose spread is
+zero. The commands now warn when this applies. For short templates, vary the
+target length rather than the noise to explore alternatives.
 
 ### Training the model
 
