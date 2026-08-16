@@ -4,5 +4,7 @@ __pycache__/
 *backup*
 build/
 raygun.egg-info/
+UNKNOWN.egg-info/
+.venv/
 
 

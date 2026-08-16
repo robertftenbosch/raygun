@@ -14,13 +14,18 @@ import os
 import torch
 from einops import rearrange
 from Bio import SeqIO
+import logging
+from raygun.validation import partition_records
+
+logger = logging.getLogger(__name__)
 
 class RaygunData(Dataset):
     def __init__(self, fastafile, alphabet, model = None,
                  precomputed = False, save = False,
-                 embeddingfolder = None, 
+                 embeddingfolder = None,
                  device = "cpu", no_records = -1,
-                 maxlength=1000, minlength=50):
+                 maxlength=1000, minlength=50,
+                 allow_nucleotides=False, strict=False):
         """
         parameters:
         model, alphabet => ESM-2 650M model and alphabet; ensure that it is in eval mode
@@ -28,9 +33,14 @@ class RaygunData(Dataset):
         save            => to save the computed embeddings
         embeddingfolder => if precomputed is True, it is the location where the embeddings are stored
                            if save is True, it is the location where the embeddings are saved
-        no_records      => if positive, the number of items in the __getitem__ is overriden to the 
+        no_records      => if positive, the number of items in the __getitem__ is overriden to the
                            specified value
         maxlength       => maximum sequence length to allow
+        minlength       => minimum sequence length to allow
+        allow_nucleotides => if True, skip the DNA/RNA check. ACGT are valid amino-acid
+                           codes, so a nucleotide FASTA is otherwise processed as protein
+                           and produces meaningless output without any error
+        strict          => if True, raise instead of warning when records are rejected
         """
         assert precomputed == False or embeddingfolder is not None, "precomputed is True but the `embeddingfolder` is not provided"
         assert save == False or embeddingfolder is not None, "save is True but the save location,  denoted by `embeddingfolder` is None"
@@ -43,8 +53,26 @@ class RaygunData(Dataset):
         self.alphabet  = alphabet
         self.bc        = self.alphabet.get_batch_converter()
         self.records   = list(SeqIO.parse(fastafile, "fasta"))
-        self.sequences = [(rec.id, str(rec.seq)) for rec in self.records if 
-                         len(rec.seq) <= maxlength and len(rec.seq) >= minlength]
+
+        accepted, rejected = partition_records(self.records,
+                                               minlength = minlength,
+                                               maxlength = maxlength,
+                                               allow_nucleotides = allow_nucleotides)
+        if rejected:
+            summary = "\n".join(f"  - {rec.id}: {reason}" for rec, reason in rejected)
+            message = (f"{len(rejected)} of {len(self.records)} records in "
+                       f"{fastafile} were rejected and will NOT be processed:\n{summary}")
+            if strict:
+                raise ValueError(message)
+            logger.warning(message)
+        if not accepted:
+            raise ValueError(f"No usable records left in {fastafile}: all "
+                             f"{len(self.records)} were rejected. Check the sequence "
+                             f"lengths (allowed: {minlength}-{maxlength}) and whether "
+                             f"the file contains protein rather than nucleotide sequences.")
+
+        self.rejected  = rejected
+        self.sequences = [(rec.id, str(rec.seq)) for rec in accepted]
         if precomputed:
             h5exists = lambda x : os.path.exists(f"{embeddingfolder}/{x}.h5")
             self.sequences = [s for s in self.sequences if h5exists(s[0])]

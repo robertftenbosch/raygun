@@ -9,6 +9,8 @@ from raygun.modelv2.loader import RaygunData
 from raygun.modelv2.ltraygun import RaygunLightning
 from raygun.pretrained import raygun_2_2mil_800M, raygun_4_4mil_800M
 from raygun.pll import get_PLL, penalizerepeats
+from raygun.validation import (describe_noise_support, describe_reconstruction_quality,
+                               reconstruction_identity)
 from raygun.modelv2.training import training
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -94,6 +96,16 @@ def get_params():
     parser.add_argument("--finetune-epochs", default=10, type=int, help="How many epochs to finetune. Used only when finetune set to true")
     parser.add_argument("--finetune-lr", default=1e-5, type=float, help="Finetune learning rate. Used only when finetune set to true")
     parser.add_argument("--finetune-bsize", default=2, type=int, help="Finetune batch size. Used only when finetune set to true")
+    parser.add_argument("--filter-minlength", type = int, default = 50,
+                        help = "Reject template records shorter than this (default: 50). Sequences below the reduction size cannot be represented properly.")
+    parser.add_argument("--filter-maxlength", type = int, default = 1000,
+                        help = "Reject template records longer than this (default: 1000)")
+    parser.add_argument("--allow-nucleotides", action = "store_true", default = False,
+                        help = "Skip the DNA/RNA check. ACGT are valid amino-acid codes, so nucleotide records are otherwise processed as protein and yield meaningless output")
+    parser.add_argument("--strict-input", action = "store_true", default = False,
+                        help = "Fail instead of warning when input records are rejected")
+    parser.add_argument("--skip-reconstruction-check", action = "store_true", default = False,
+                        help = "Skip the zero-noise reconstruction pass that reports whether the model can reproduce each template")
     configs = parser.parse_args()
     if configs.device < 0:
         configs.device = "cpu" 
@@ -138,8 +150,20 @@ def main():
     preddata = RaygunData(fastafile = config["templatefasta"],
                           alphabet  = esmalphabet,
                           model     = esmmodel,
-                          device    = config["device"])
+                          device    = config["device"],
+                          minlength = config["filter_minlength"],
+                          maxlength = config["filter_maxlength"],
+                          allow_nucleotides = config["allow_nucleotides"],
+                          strict    = config["strict_input"])
     print(f"\t\tNo of sequences to generate: {len(preddata)}")
+
+    # Every record whose length leaves the encoder with single-residue windows
+    # gets a zero noise sigma, making `--noiseratio` inert for that record.
+    if config["noiseratio"] > 0:
+        for recname, templateseq in preddata.sequences:
+            noisewarning = describe_noise_support(len(templateseq))
+            if noisewarning is not None:
+                logger.warning(f"{recname}: {noisewarning}")
     predloader = DataLoader(preddata, batch_size = 1, shuffle = False,
                            collate_fn = preddata.collatefn)
     
@@ -151,8 +175,17 @@ def main():
     togenerate = int(pllaccept * config["sample_ratio"])
     
     with open(config["lengthinfo"], "r") as js:
-        lengthinfo = json.load(js) 
-    
+        lengthinfo = json.load(js)
+
+    # A record with no entry here would only fail once generation is already
+    # under way, after the embeddings have been computed.
+    missing = [name for name, _ in preddata.sequences if name not in lengthinfo]
+    if missing:
+        raise KeyError(f"{config['lengthinfo']} has no length range for: "
+                       f"{', '.join(missing)}. Keys must match the FASTA record ids "
+                       f"(the part before the first whitespace).")
+
+
     records = []
     outprefix = f"{config['sample_out_folder']}/unfiltered_{noiseratio}_{togenerate}"
 
@@ -163,6 +196,19 @@ def main():
         for tok, emb, mask, batches in predloader:
             emb  = emb.to(config["device"])
             name = batches[0][0]
+
+            # One zero-noise pass first: if the model cannot even reproduce the
+            # template, every candidate derived from it is built on a
+            # representation that is already wrong.
+            if not config["skip_reconstruction_check"]:
+                recon = raymodel(emb, return_logits_and_seqs = True)["generated-sequences"][0]
+                identity = reconstruction_identity(batches[0][1], recon)
+                reconwarning = describe_reconstruction_quality(name, identity)
+                if reconwarning is not None:
+                    logger.warning(reconwarning)
+                else:
+                    logger.info(f"{name}: reconstruction identity {identity:.3f}")
+
             for h in tqdm(range(togenerate)):
                 nratio      = (noiseratio if (not config["randomize_noise"]) else 
                                random.random() * noiseratio)
