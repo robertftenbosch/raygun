@@ -141,31 +141,22 @@ def get_cycles(embedding, finallength, model, nratio,
     return changedseq
 
 
-def get_model_(mod, checkpoint=None, 
-               checkpoint_encoders=12, 
-               checkpoint_decoders=12, 
+def get_model_(mod, checkpoint=None,
+               checkpoint_encoders=12,
+               checkpoint_decoders=12,
                esmmodel=None):
-    # check first it checkpoint provided
-    if checkpoint is not None:
-        rmod     = Raygun(numencoders=checkpoint_encoders, 
-                         numdecoders=checkpoint_decoders, 
-                         fixed_esm_batching=True)
-        with warnings.catch_warnings(record=True) as w:
-            raymodel = RaygunLightning.load_from_checkpoint(checkpoint, 
-                                                            raygun=rmod, 
-                                                            esmmodel=esmmodel,
-                                                            strict=False)
-        return raymodel
-    # if checkpoint not provided, return the default pretrained
-    return pretrained.load_pretrained(mod, return_lightning_module=True)
+    return pretrained.load_model(mod, checkpoint=checkpoint,
+                                 num_encoders=checkpoint_encoders,
+                                 num_decoders=checkpoint_decoders,
+                                 esmmodel=esmmodel,
+                                 return_lightning_module=True)
 
 
     
 def get_model(config, esmmodel, esmalph):
     mod        = config["model"]
     checkpoint = config["checkpoint"]
-    logger.info(f"Loading checkpoint {checkpoint}" if checkpoint is not None
-                else f"Loading the Raygun {mod} model")
+    logger.info(f"Loading {pretrained.describe_model_choice(mod, checkpoint)}")
     raymodel = get_model_(mod, checkpoint=checkpoint,
                           checkpoint_encoders=config["checkpoint_encoders"],
                           checkpoint_decoders=config["checkpoint_decoders"],

@@ -13,7 +13,8 @@ from Bio import SeqIO
 from Bio.Align import PairwiseAligner, substitution_matrices
 from esm.pretrained import esm2_t33_650M_UR50D
 from raygun.pll import get_PLL
-from raygun.pretrained import raygun_8_8mil_800M
+from raygun.pretrained import (DEFAULT_MODEL, PRETRAINED_MODELS,
+                               describe_model_choice, load_model)
 from raygun.validation import noise_effective_fraction
 from tqdm import tqdm
 
@@ -36,6 +37,10 @@ def main():
     ap.add_argument("--noise", type=float, default=0.2)
     ap.add_argument("--shrink", type=float, default=0.9)
     ap.add_argument("--device", type=int, default=0)
+    ap.add_argument("--model", choices=list(PRETRAINED_MODELS), default=DEFAULT_MODEL,
+                    help=f"Raygun model to benchmark (default: {DEFAULT_MODEL})")
+    ap.add_argument("--checkpoint", default=None,
+                    help="A local checkpoint to benchmark instead of --model")
     args = ap.parse_args()
 
     torch.manual_seed(0)
@@ -43,7 +48,10 @@ def main():
     esmmodel, alph = esm2_t33_650M_UR50D()
     bc = alph.get_batch_converter()
     esmmodel = esmmodel.to(dev).eval()
-    raymodel = raygun_8_8mil_800M().to(dev).eval()
+    print(f"benchmarking {describe_model_choice(args.model, args.checkpoint)}")
+    raymodel = load_model(args.model, checkpoint=args.checkpoint,
+                          esmmodel=esmmodel,
+                          return_lightning_module=False).to(dev).eval()
 
     records = list(SeqIO.parse(args.fasta, "fasta"))
     rows = []
@@ -65,6 +73,7 @@ def main():
             plls = [get_PLL(g, esmmodel, alph, bc) / len(g) for g in gens]
 
             rows.append(dict(
+                model=args.checkpoint or args.model,
                 id=rec.id,
                 description=rec.description.split("|", 1)[-1].strip(),
                 length=len(seq),
@@ -83,7 +92,8 @@ def main():
 
     df = pd.DataFrame(rows)
     df.to_csv(args.out_tsv, sep="\t", index=False)
-    print(f"\nwrote {args.out_tsv} ({len(df)} templates)")
+    print(f"\nwrote {args.out_tsv} ({len(df)} templates, "
+          f"{describe_model_choice(args.model, args.checkpoint)})")
     print(f"reconstruction identity: median {df.recon_identity.median():.3f}, "
           f"min {df.recon_identity.min():.3f}, "
           f"below 0.90: {(df.recon_identity < 0.90).sum()}")

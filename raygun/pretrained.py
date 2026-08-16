@@ -1,4 +1,6 @@
-import torch 
+import warnings
+
+import torch
 from raygun.modelv2.raygun import Raygun as RaygunV2
 from raygun.modelv2.ltraygun import RaygunLightning
 from raygun.modelv2.esmdecoder import DecoderBlock
@@ -98,3 +100,29 @@ def load_pretrained(name=DEFAULT_MODEL, return_lightning_module=True):
         raise ValueError(f"Unknown Raygun model {name!r}; choose one of "
                          f"{', '.join(PRETRAINED_MODELS)}")
     return PRETRAINED_MODELS[name](return_lightning_module=return_lightning_module)
+
+
+def load_model(name=DEFAULT_MODEL, checkpoint=None, num_encoders=12,
+               num_decoders=12, esmmodel=None, return_lightning_module=True):
+    """Load a Raygun model, from a local checkpoint if given, else by name.
+
+    Single entry point for every command, so they cannot drift apart in which
+    weights they use. A local `checkpoint` always wins over `name`.
+    """
+    if checkpoint is not None:
+        rmod = RaygunV2(numencoders=num_encoders,
+                        numdecoders=num_decoders,
+                        fixed_esm_batching=True)
+        with warnings.catch_warnings(record=True):
+            raymodel = RaygunLightning.load_from_checkpoint(checkpoint,
+                                                            raygun=rmod,
+                                                            esmmodel=esmmodel,
+                                                            strict=False)
+        return raymodel if return_lightning_module else raymodel.model
+    return load_pretrained(name, return_lightning_module=return_lightning_module)
+
+
+def describe_model_choice(name=DEFAULT_MODEL, checkpoint=None):
+    """One line naming the weights actually being loaded, for logging."""
+    return (f"local checkpoint {checkpoint}" if checkpoint is not None
+            else f"pretrained Raygun {name}")

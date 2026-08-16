@@ -7,7 +7,8 @@ from raygun.modelv2.raygun import Raygun
 from raygun.modelv2.esmdecoder import DecoderBlock
 from raygun.modelv2.loader import RaygunData
 from raygun.modelv2.ltraygun import RaygunLightning
-from raygun.pretrained import DEFAULT_MODEL, PRETRAINED_MODELS, load_pretrained
+from raygun.pretrained import (DEFAULT_MODEL, PRETRAINED_MODELS,
+                               describe_model_choice, load_model)
 from raygun.pll import get_PLL, penalizerepeats
 from raygun.validation import (describe_noise_support, describe_reconstruction_quality,
                                reconstruction_identity)
@@ -77,6 +78,12 @@ def get_params():
                         help = "Length information in JSON format")
     parser.add_argument("--model", choices = list(PRETRAINED_MODELS), default = DEFAULT_MODEL,
                         help = f"The Raygun model selected (default: {DEFAULT_MODEL})")
+    parser.add_argument("--checkpoint", default = None,
+                        help = "A locally trained Raygun checkpoint to use instead of --model")
+    parser.add_argument("--checkpoint_encoders", type = int, default = 12,
+                        help = "Number of encoders in that checkpoint")
+    parser.add_argument("--checkpoint_decoders", type = int, default = 12,
+                        help = "Number of decoders in that checkpoint")
     parser.add_argument("--noiseratio", type = float, default = 1.0,  
                         help = "Noise to introduce during generation")
     parser.add_argument("--num_raygun_samples_to_generate", default = 50, type = int, 
@@ -114,8 +121,11 @@ def get_params():
     return configs.__dict__
    
 def get_model(config, esmmodel, esmalph):
-    logger.info(f"Loading the Raygun {config['model']} model")
-    raymodel = load_pretrained(config["model"], return_lightning_module=True)
+    logger.info(f"Loading {describe_model_choice(config['model'], config['checkpoint'])}")
+    raymodel = load_model(config["model"], checkpoint=config["checkpoint"],
+                          num_encoders=config["checkpoint_encoders"],
+                          num_decoders=config["checkpoint_decoders"],
+                          esmmodel=esmmodel, return_lightning_module=True)
     if config["finetune"]:
         ep     = config["finetune_epochs"]
         tfasta = config["finetune_trainf"]

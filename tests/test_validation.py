@@ -119,6 +119,18 @@ class TestModelRegistry:
         with pytest.raises(ValueError, match="Unknown Raygun model"):
             load_pretrained("16M")
 
+    def test_load_model_rejects_unknown_name_too(self):
+        from raygun.pretrained import load_model
+        with pytest.raises(ValueError, match="Unknown Raygun model"):
+            load_model("16M")
+
+    def test_describe_names_the_weights_used(self):
+        from raygun.pretrained import describe_model_choice
+        assert describe_model_choice("8.8M") == "pretrained Raygun 8.8M"
+        # A local checkpoint overrides the name, and the log must say so.
+        assert describe_model_choice("8.8M", "/tmp/mine.ckpt") == \
+            "local checkpoint /tmp/mine.ckpt"
+
 
 class TestPartitionRecords:
     def test_rejects_dna_and_keeps_protein(self):

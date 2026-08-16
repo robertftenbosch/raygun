@@ -14,6 +14,10 @@ python benchmarks/run_rcsb_benchmark.py benchmarks/rcsb100.fasta \
     benchmarks/results.tsv --samples 5 --noise 0.2 --shrink 0.9
 ```
 
+The numbers below are for the default `8.8M` model. Pass `--model 4.4M` or
+`--checkpoint mine.ckpt` to benchmark different weights; the model used is
+recorded in the first column of the TSV.
+
 100 entries yielded 112 polymer entities, of which 82 survived filtering
 (8 too short, 1 too long, 21 duplicate sequences). Lengths span 52-716 residues,
 median 241, across a wide range of organisms.

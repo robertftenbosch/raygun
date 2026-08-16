@@ -136,8 +136,13 @@ Note `--lengthinfo`, not `--leninfo`.
 
 Parameters worth understanding:
 
-- `--model` defaults to `8.8M`, the one the README recommends. Both commands
-  accept it; before this fork `raygun-sample-multiple` silently used `4.4M`.
+- `--model` selects the weights: `2.2M`, `4.4M` or `8.8M`, defaulting to `8.8M`,
+  the one the README recommends. `--checkpoint mine.ckpt` uses a model you
+  trained yourself instead, with `--checkpoint_encoders/--checkpoint_decoders`
+  if it does not have the standard 12 of each. Both sampling commands and the
+  benchmark take the same options, and each logs which weights it loaded:
+  `Loading pretrained Raygun 8.8M`. Before this fork, `raygun-sample-multiple`
+  silently used `4.4M` with no way to change it.
 - `--noiseratio` between 0 and 0.5 for variation that stays close to the
   template, higher for more diversity. Useless below 100 residues (§5).
 - `--num_raygun_samples_to_generate` is how many survive PLL filtering;
@@ -187,6 +192,9 @@ from raygun.pretrained import load_pretrained
 esmmodel, alph = esm2_t33_650M_UR50D()
 bc = alph.get_batch_converter()
 esmmodel = esmmodel.to(0).eval()
+
+# load_pretrained picks a released model by name; load_model also accepts
+# checkpoint="mine.ckpt" for one you trained yourself.
 raymodel = load_pretrained("8.8M", return_lightning_module=False).to(0).eval()
 
 with torch.no_grad():
